@@ -112,6 +112,7 @@ def handle_clients_logic(clients_df, transactions_df, transfers_df):
                 profit=profit,
                 product_type=best_product)
 
+        # TODO save push to csv file with format: client_code, product, push_notification
         print(f"Push notification for {client.name}:\n{push_notification}\n")
 
 def get_profit(client: Client, product_type: str) -> float:
