@@ -102,13 +102,19 @@ def handle_clients_logic(clients_df, transactions_df, transfers_df):
     
     for client in clients:
         best_product = choose_best_product(client, transfers_df)
-        push_notification = generate_push_notification(
-            name=client.name,
-            age=client.age,
-            saving=client.available_balance,
-            product_type=best_product)
-
-        print(f"Push notification for {client.name}:\n{push_notification}\n")
+        if best_product =='Инвестиции':
+            print(f"Client {client.name} is suitable for Investments product.")
+        elif best_product =='Обмен валют':
+            print(f"Client {client.name} is suitable for Currency Exchange product.")
+        elif best_product =='Золотые слитки':
+            print(f"Client {client.name} is suitable for Gold Bullion product.")
+        else:
+            push_notification = generate_push_notification(
+                name=client.name,
+                age=client.age,
+                saving=client.available_balance,
+                product_type=best_product)
+            print(f"Push notification for {client.name}:\n{push_notification}\n")
 
 
 
