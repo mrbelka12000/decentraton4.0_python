@@ -42,6 +42,10 @@ class Client:
     avg_monthly_balance_KZT: int
     transactions: List[Transaction]
     transfers: List[Transfer]
+    total_transfers_in: float = 0.0
+    total_transfers_out: float = 0.0
+    total_transactions: float = 0.0
+    top4_categories: List[dict] = None
 
 
 def read_many_csv(files: list[Path]) -> pd.DataFrame:
@@ -155,7 +159,7 @@ def main():
 
     clients = calculations(transactions_df, transfers_df, clients)
 
-    # print(clients[0].top4_categories,clients[0].total_transactions,clients[0].total_transfers_in, clients[0].total_transfers_out)
+    print(clients[0].top4_categories,clients[0].total_transactions,clients[0].total_transfers_in, clients[0].total_transfers_out)
 
 def calculations(transactions_df, transfers_df, clients):
     
