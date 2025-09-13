@@ -2,6 +2,7 @@ from dataclasses import dataclass
 from typing import List
 from collections import defaultdict
 from ai_client import get_recomended_product, generate_push_notification
+import pandas as pd
 
 # ---------- Models ----------
 @dataclass
@@ -96,26 +97,34 @@ def build_clients(clients_df: pd.DataFrame, transactions_df: pd.DataFrame, trans
     return clients
 
 
+
 def handle_clients_logic(clients_df, transactions_df, transfers_df):
     clients = build_clients(clients_df, transactions_df, transfers_df)
     clients = calculations(transactions_df, transfers_df, clients)
     
     for client in clients:
         best_product = choose_best_product(client, transfers_df)
-        if best_product =='Инвестиции':
-            print(f"Client {client.name} is suitable for Investments product.")
-        elif best_product =='Обмен валют':
-            print(f"Client {client.name} is suitable for Currency Exchange product.")
-        elif best_product =='Золотые слитки':
-            print(f"Client {client.name} is suitable for Gold Bullion product.")
-        else:
-            push_notification = generate_push_notification(
+        print(f"\nClient: {client.name}, Age: {client.age}, City: {client.city}, Avg Balance: {client.avg_monthly_balance_KZT}₸, Product: {best_product}")
+        profit = get_profit(client, best_product)
+        push_notification = generate_push_notification(
                 name=client.name,
                 age=client.age,
-                saving=client.available_balance,
+                profit=profit,
                 product_type=best_product)
-            print(f"Push notification for {client.name}:\n{push_notification}\n")
 
+        print(f"Push notification for {client.name}:\n{push_notification}\n")
+
+def get_profit(client: Client, product_type: str) -> float:
+    from profits import calculate_credit_card_benefit, calculate_premium_card_benefit, calculate_travel_card_benefit
+
+    if product_type == 'Карта для путешествий':
+        return calculate_travel_card_benefit(client)
+    elif product_type == 'Премиальная карта':
+        return calculate_premium_card_benefit(client)
+    elif product_type == 'Кредитная карта':
+        return calculate_credit_card_benefit(client)
+    
+    return 0.0
 
 
 def choose_best_product(client: Client, transfers_df) -> str:
@@ -123,13 +132,11 @@ def choose_best_product(client: Client, transfers_df) -> str:
         transfers_df[transfers_df["client_code"] == client.client_code],
         product_transfer_map
     )
+
     if best_product is not None:
-        print(f"  Recommended product based on transfers for {client.name}: {best_product} (score: {score})")
         return best_product
     
-    recomended_product,reason = get_recomended_product(client)
-    print(f"  Recommended product by AI for {client.name}: {recomended_product} (reason: {reason})")
-    
+    recomended_product, reason = get_recomended_product(client)
     return recomended_product 
 
 def calculations(transactions_df, transfers_df, clients):
