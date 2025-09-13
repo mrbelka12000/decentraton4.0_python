@@ -4,7 +4,7 @@ import pandas as pd
 from dataclasses import dataclass
 from typing import List
 from collections import defaultdict
-from pprint import pprint
+from client import answer
 
 # ---------- Models ----------
 @dataclass
@@ -46,6 +46,7 @@ class Client:
     total_transfers_out: float = 0.0
     total_transactions: float = 0.0
     top4_categories: List[dict] = None
+    available_balance: float = 0.0
 
 
 def read_many_csv(files: list[Path]) -> pd.DataFrame:
@@ -158,8 +159,9 @@ def main():
     clients = build_clients(clients_df, transactions_df, transfers_df)
 
     clients = calculations(transactions_df, transfers_df, clients)
-
-    print(clients[0].top4_categories,clients[0].total_transactions,clients[0].total_transfers_in, clients[0].total_transfers_out)
+    print(f"Loaded {len(clients)} clients from {p}")
+    answer(clients[11])
+    # print(clients[0].top4_categories,clients[0].total_transactions,clients[0].total_transfers_in, clients[0].total_transfers_out)
 
 def calculations(transactions_df, transfers_df, clients):
     
@@ -212,7 +214,6 @@ def calculations(transactions_df, transfers_df, clients):
         client.total_transfers_out = out_totals.get(client.client_code, 0.0)
         client.top4_categories = top4_transactions_map.get(client.client_code, [])
         client.total_transactions = transactions_total_dict.get(client.client_code, 0.0)
-
     return clients
 
 if __name__ == "__main__":
