@@ -1,87 +1,206 @@
-PROMPT_TEMPLATE = """
-Ты — финансовый ассистент, который анализирует поведение клиента и предлагает персональные push-уведомления.
-Твоя цель — помочь клиенту контролировать расходы, формировать сбережения и замечать возможности для дохода.
-Используй только предоставленные категории расходов и продукты. Если не хватает данных — делай консервативные рекомендации.
+from dataclasses import dataclass
+from typing import List
+from collections import defaultdict
+from ai_client import get_recomended_product, generate_push_notification
 
-## Контекст:
-- Профиль клиента:
-  - Имя: {client_name}
-  - Статус: {client_status}
-  - Возраст: {client_age}
-  - Город: {client_city}
-  - Средний месячный баланс (KZT): {avg_monthly_balance}
+# ---------- Models ----------
+@dataclass
+class Transaction:
+    client_code: int
+    name: str
+    product: str
+    status: str
+    city: str
+    date: str
+    category: str
+    amount: float
+    currency: str
 
-- Сводка за последние 3 месяца:
-  - Расходы по категориям:
-    {total_transactions}
-  - Полученные переводы (IN):
-    {total_transfers_in}
-  - Переводы другим (OUT):
-    {total_transfers_out}
+@dataclass
+class Transfer:
+    client_code: int
+    name: str
+    product: str
+    status: str
+    city: str
+    date: str
+    type: str
+    direction: str
+    amount: float
+    currency: str
 
-- Топ-4 категорий расходов:
-{top4_categories}
-
-
-
-- Каталог доступных банковских продуктов:
-  1) Карта для путешествий → подходит, если заметные траты на «Путешествия», «Такси», «Отели».
-  2) Премиальная карта → для клиентов с высоким балансом/остатком, у кого траты на «Кафе и рестораны», «Косметика и Парфюмерия».
-  3) Кредитная карта → для клиентов с активными расходами на «Игры», «Доставка», «Кино» или частыми разнотипными тратами.
-  4) Обмен валют → 
-     • Подходит, если клиент переводил или получал более 10 000 000 ₸ за период.  
-     • Также полезен для клиентов с валютными доходами или активными трансграничными операциями.
-  5) Кредит наличными → если расходы превышают баланс или есть большие исходящие переводы.
-  6) Депозит Мультивалютный → выгоден клиентам с доходами/переводами в разных валютах.
-  7) Депозит Сберегательный → для тех, кто копит и не планирует тратить ближайшее время.
-  8) Депозит Накопительный → для клиентов с регулярными расходами, кто хочет откладывать постепенно.
-  9) Инвестиции → для тех, у кого остаётся свободный баланс и низкие расходы.
-  10) Золотые слитки → вариант для клиентов с высоким доходом и желающих долгосрочно сохранить капитал.
-
-## Задача:
-1) Проанализируй расходы относительно доступного баланса и доходов. Обрати внимание на ростовые/аномальные категории.
-2) Подбери РОВНО один продукт из каталога, который лучше всего подходит профилю и паттернам трат/переводов,
-   и обоснуй выбор кратко (как оффер). Если явного соответствия нет — верни null.
-
-## Формат ответа (строго JSON):
-## Формат ответа (строго JSON):
-{{
-  "product_suggestion": {{
-    "name": "продукт",
-    "reason": "обоснование"
-  }}
-}}
-"""
+@dataclass
+class Client:
+    client_code: int
+    name: str
+    status: str
+    age: int
+    city: str
+    avg_monthly_balance_KZT: int
+    transactions: List[Transaction]
+    transfers: List[Transfer]
+    total_transfers_in: float = 0.0
+    total_transfers_out: float = 0.0
+    total_transfers: float = 0.0
+    total_transactions: float = 0.0
+    top4_categories: List[dict] = None
+    available_balance: float = 0.0
 
 
-def answer(client) -> dict:
-  from openai import OpenAI
+def build_clients(clients_df: pd.DataFrame, transactions_df: pd.DataFrame, transfers_df: pd.DataFrame) -> list[Client]:
+    clients: list[Client] = []
 
-  top4_str = "\n".join(
-    [f"{item['category']}: {item['amount']:,.2f} ₸" for item in client.top4_categories]
-  )
 
-  prompt = PROMPT_TEMPLATE.format(client_name=client.name,
-                                    client_status=client.status,
-                                    client_age=client.age,
-                                    client_city=client.city,
-                                    avg_monthly_balance=client.avg_monthly_balance_KZT,
-                                    total_transactions=client.total_transactions,
-                                    total_transfers_in=client.total_transfers_in,
-                                    total_transfers_out=client.total_transfers_out,
-                                    top4_categories=top4_str)
-  
-  
-  print(prompt)
-  client = OpenAI()
+    for _, row in clients_df.iterrows():
+        code = row["client_code"]
 
-  response = client.chat.completions.create(
-    model="gpt-4o-mini",   # or "gpt-4o", "gpt-3.5-turbo", etc.
-    messages=[
-        {"role": "system", "content": "Ты умный ассистент банка."},
-        {"role": "user", "content": prompt}
-    ],
-    temperature=0.3
-  )
-  result = response.choices[0].message.content
-  print(result)
+    # Transactions
+        client_transactions = [
+            Transaction(**t.to_dict())
+            for _, t in transactions_df[transactions_df["client_code"] == code].iterrows()
+        ]
+
+    # Transfers
+        client_transfers = [
+            Transfer(**tr.to_dict())
+            for _, tr in transfers_df[transfers_df["client_code"] == code].iterrows()
+        ]
+
+    # Group sums
+        totals_by_category = defaultdict(float)
+        for tx in client_transactions:
+            totals_by_category[tx.category] += tx.amount
+
+        totals_by_transfer = defaultdict(float)
+        for tr in client_transfers:
+            key = f"{tr.type}_{tr.direction}"
+            totals_by_transfer[key] += tr.amount
+
+    # Create client object
+        client = Client(
+            client_code=row["client_code"],
+            name=row["name"],
+            status=row["status"],
+            age=row["age"],
+            city=row["city"],
+            avg_monthly_balance_KZT=row["avg_monthly_balance_KZT"],
+            transactions=client_transactions,
+            transfers=client_transfers,
+        )
+
+    # Attach summaries (optional: as attributes)
+        client.totals_by_category = dict(totals_by_category)
+        client.totals_by_transfer = dict(totals_by_transfer)
+        clients.append(client)   # ✅ append instead of overwrite
+
+    return clients
+
+
+def handle_clients_logic(clients_df, transactions_df, transfers_df):
+    clients = build_clients(clients_df, transactions_df, transfers_df)
+    clients = calculations(transactions_df, transfers_df, clients)
+    
+    for client in clients:
+        best_product = choose_best_product(client, transfers_df)
+        push_notification = generate_push_notification(
+            name=client.name,
+            age=client.age,
+            saving=client.available_balance,
+            product_type=best_product)
+
+        print(f"Push notification for {client.name}:\n{push_notification}\n")
+
+
+
+def choose_best_product(client: Client, transfers_df) -> str:
+    best_product, score = recommend_product_by_transfers(
+        transfers_df[transfers_df["client_code"] == client.client_code],
+        product_transfer_map
+    )
+    if best_product is not None:
+        print(f"  Recommended product based on transfers for {client.name}: {best_product} (score: {score})")
+        return best_product
+    
+    recomended_product,reason = get_recomended_product(client)
+    print(f"  Recommended product by AI for {client.name}: {recomended_product} (reason: {reason})")
+    
+    return recomended_product 
+
+def calculations(transactions_df, transfers_df, clients):
+    # GROUP TRANSACTIONS
+    grouped_transactions = (
+        transactions_df
+        .groupby(["client_code", "category"])["amount"]
+        .sum()
+        .reset_index()
+        .sort_values(by="amount", ascending=False)
+    )
+    grouped_transactions = grouped_transactions.sort_values(
+        by=["client_code", "amount"], ascending=[True, False]
+    )
+    top4_transactions = grouped_transactions.groupby("client_code").head(4)
+    
+    top4_transactions_map = (
+    top4_transactions
+    .groupby("client_code", group_keys=False)
+    .apply(
+        lambda df: [
+            {"category": cat, "amount": float(amt)}
+            for cat, amt in zip(df["category"], df["amount"])
+        ],
+        include_groups=False
+    )
+    .to_dict()
+    )
+
+    transactions_total_dict = dict(
+        transactions_df.groupby("client_code")["amount"].sum()
+    )
+
+    # Calculate total in/out transfers per client
+    transfer_sums = (
+        transfers_df
+        .groupby(["client_code", "direction"])["amount"]
+        .sum()
+        .unstack(fill_value=0)  # makes columns 'in', 'out'
+        .reset_index()
+    )
+
+    in_totals = dict(zip(transfer_sums["client_code"], transfer_sums.get("in", 0)))
+    out_totals = dict(zip(transfer_sums["client_code"], transfer_sums.get("out", 0)))
+
+    # Attach calculated fields to clients
+    for client in clients:
+        client.total_transfers_in = in_totals.get(client.client_code, 0.0)
+        client.total_transfers_out = out_totals.get(client.client_code, 0.0)
+        client.total_transfers = client.total_transfers_in + client.total_transfers_out
+        client.top4_categories = top4_transactions_map.get(client.client_code, [])
+        client.total_transactions = transactions_total_dict.get(client.client_code, 0.0)
+    
+    return clients
+
+# mapping: продукт -> связанные типы переводов
+product_transfer_map = {
+   "Обмен валют": ["fx_buy", "fx_sell"],
+   "Инвестиции": ["invest_out", "invest_in"],
+   "Золотые слитки": ["gold_buy_out", "gold_sell_in"]
+}
+
+def recommend_product_by_transfers(client_transfers, product_map):
+
+    scores = {product: 0 for product in product_map}
+
+    for _, tr in client_transfers.iterrows():
+        tr_type = tr["type"]
+        tr_amount = tr["amount"]
+        for product, related_types in product_map.items():
+            if tr_type in related_types:
+                # можно учитывать не только факт операции, но и её сумму
+                scores[product] += tr_amount
+
+    # выбрать продукт с максимальным "весом"
+    if max(scores.values()) == 0:
+        return None, 0 # нет подходящего продукта
+
+    best_product = max(scores, key=scores.get)
+    return best_product, scores[best_product]
