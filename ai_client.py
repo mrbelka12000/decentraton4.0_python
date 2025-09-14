@@ -21,9 +21,6 @@ PROMPT_TEMPLATE = """
   - Общее движение средств:
     {total_transfers}
 
-- Топ-4 категорий расходов:
-{top4_categories}
-
 
 
 - Каталог доступных банковских продуктов:
@@ -50,7 +47,8 @@ PROMPT_TEMPLATE = """
   "product_suggestion": {{
     "name": "продукт",
     "reason": "обоснование"
-  }}
+  }},
+  "accuracy": 0-10 (насколько уверен в рекомендации)
 }}
 """
 
@@ -58,10 +56,6 @@ PROMPT_TEMPLATE = """
 def get_recomended_product(client) -> dict:
   from openai import OpenAI
   import json
-
-  top4_str = "\n".join(
-    [f"{item['category']}: {item['amount']:,.2f} ₸" for item in client.top4_categories]
-  )
 
   prompt = PROMPT_TEMPLATE.format(client_name=client.name,
                                     client_status=client.status,
@@ -72,7 +66,7 @@ def get_recomended_product(client) -> dict:
                                     total_transfers_in=client.total_transfers_in,
                                     total_transfers_out=client.total_transfers_out,
                                     total_transfers=client.total_transfers,
-                                    top4_categories=top4_str)
+                                    )
   
   client = OpenAI()
 
@@ -90,9 +84,9 @@ def get_recomended_product(client) -> dict:
   parsed = json.loads(result)
   # Access values
   product_name = parsed["product_suggestion"]["name"]
-  reason = parsed["product_suggestion"]["reason"]
+  accuracy = parsed["accuracy"]
 
-  return product_name, reason
+  return product_name, accuracy
 
 
 from datetime import date
