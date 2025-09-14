@@ -2,6 +2,8 @@ import argparse
 from pathlib import Path
 import pandas as pd
 from client import handle_clients_logic
+from dotenv import load_dotenv
+load_dotenv()
 
 
 def read_many_csv(files: list[Path]) -> pd.DataFrame:
