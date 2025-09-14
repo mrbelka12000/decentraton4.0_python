@@ -110,7 +110,6 @@ def build_clients(clients_df: pd.DataFrame, transactions_df: pd.DataFrame, trans
 def handle_clients_logic(clients_df, transactions_df, transfers_df):
     clients = build_clients(clients_df, transactions_df, transfers_df)
     clients = calculations(transactions_df, transfers_df, clients)
-    return
     for client in clients:
         best_product = choose_best_product(client, transfers_df)
         print(f"\nClient: {client.name}, Age: {client.age}, City: {client.city}, Avg Balance: {client.avg_monthly_balance_KZT}₸, Product: {best_product}")
