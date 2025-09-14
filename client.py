@@ -1,27 +1,27 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import List
 from collections import defaultdict
 from ai_client import get_recomended_product, generate_push_notification
 import pandas as pd
+from typing import Optional
 
 # ---------- Models ----------
 @dataclass
 class Transaction:
     client_code: int
     name: str
-    product: str
     status: str
     city: str
     date: str
     category: str
     amount: float
     currency: str
+    product: Optional[str] = None
 
 @dataclass
 class Transfer:
     client_code: int
     name: str
-    product: str
     status: str
     city: str
     date: str
@@ -29,6 +29,7 @@ class Transfer:
     direction: str
     amount: float
     currency: str
+    product: Optional[str] = None
 
 @dataclass
 class Client:
@@ -51,16 +52,24 @@ class Client:
 def build_clients(clients_df: pd.DataFrame, transactions_df: pd.DataFrame, transfers_df: pd.DataFrame) -> list[Client]:
     clients: list[Client] = []
 
-
+    # Standardize columns
+    transactions_df = transactions_df.rename(columns={"products": "product"})
+    transactions_df = transactions_df.drop(columns=["products"], errors="ignore")  # in case both existed
     for _, row in clients_df.iterrows():
         code = row["client_code"]
 
     # Transactions
+
+        if "product" not in transactions_df.columns:
+            transactions_df["product"] = None 
+
         client_transactions = [
             Transaction(**t.to_dict())
             for _, t in transactions_df[transactions_df["client_code"] == code].iterrows()
         ]
 
+        if "product" not in transfers_df.columns:
+            transfers_df["product"] = None 
     # Transfers
         client_transfers = [
             Transfer(**tr.to_dict())
@@ -101,7 +110,7 @@ def build_clients(clients_df: pd.DataFrame, transactions_df: pd.DataFrame, trans
 def handle_clients_logic(clients_df, transactions_df, transfers_df):
     clients = build_clients(clients_df, transactions_df, transfers_df)
     clients = calculations(transactions_df, transfers_df, clients)
-    
+    return
     for client in clients:
         best_product = choose_best_product(client, transfers_df)
         print(f"\nClient: {client.name}, Age: {client.age}, City: {client.city}, Avg Balance: {client.avg_monthly_balance_KZT}₸, Product: {best_product}")
