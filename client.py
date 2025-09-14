@@ -129,7 +129,6 @@ def handle_clients_logic(clients_df, transactions_df, transfers_df):
         result.append((client.client_code, best_product, push_notification))
     
     save_push_notifications(result)
-    # print_comparison_report(clients, "result.csv")
 
 
 def choose_best_product(client: Client, transfers_df) -> str:
@@ -372,7 +371,7 @@ def group_transfers_by_type(
         df.groupby(["client_code", "type"])["amount"]
           .sum()
           .unstack(fill_value=0.0)
-    )  # index: client_code, columns: type
+    )
 
 
     # 3) sums by direction × type (nice for fine-grained inspection)
